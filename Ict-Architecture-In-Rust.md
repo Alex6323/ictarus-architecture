@@ -96,6 +96,8 @@ It will do the following steps in that order:
 5. Spawn an asynchronous task for printing printing round stats to the terminal.
 6. Update the node state to `State::Running`.
 
+An important difference to the Java implementation is, that instead of using raw threads, the Rust implementation uses poll-based futures which are based on cooperative multitasking instead of preemptive multitasking where instead of context switching a processes voluntarily yield control when they cannot make any progress.
+
 ## Implementation of `receiver.rs`
 
 Flow chart of what how what spawned Receiver task is doing:
@@ -109,6 +111,30 @@ Flow chart of what how what spawned Sender task is doing:
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Sender.png" />
 
 ## Implementation of `tangle.rs`
+
+The `Tangle` datastructure looks like this:
+
+```Rust
+pub struct Tangle {
+    vertices_by_hash: HashMap<SharedKey81, (SharedVertex, Flags, MaybeTrunk, MaybeBranch)>,
+    vertices_by_addr: HashMap<SharedKey81, HashSet<SharedVertex>>,
+    vertices_by_tag: HashMap<SharedKey27, HashSet<SharedVertex>>,
+}
+```
+Note: In the current implementation is it used as a store of transaction or as in-memory database. In a new implementation this will become what probably will be called `TransactionStore` as it better describes it functionality. A separate type will be created and given the name `Tangle`, which then is optimized to store and update references between vertices.
+
+The most important method of this type is `attach_vertex`. It takes a key that is derived from the transaction hash, a `Vertex`, some metadata called `flags` and maybe a reference to a `trunk` vertex and a maybe a reference to a `branch` vertex. This is achieved by using an enumeration type, that can either hold `Some(vertex)` or `None` to represent that this vertex is not available at the moment and might be updated at a later point in time.
+
+```Rust
+pub fn attach_vertex(
+        &mut self,
+        tx_key: SharedKey81,
+        vertex: Vertex,
+        flags: Flags,
+        trunk: MaybeTrunk,
+        branch: MaybeBranch,
+    ) -> SharedVertex {...}
+```
 
 
 

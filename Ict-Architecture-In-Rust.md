@@ -39,19 +39,19 @@ While the Ict core implements the IOTA gossip protocol and is responsible for es
 # Architecture of Ictarus
 
 ## Project structure
-The following table should give you a basic overview about the project structure:
+The following table should give you a basic overview about the project structure. Important types that hold most of the business logic are highlighted:
 
 | File              | Submodule | Function                                          |
 | ----------------- | --------- | ------------------------------------------------- |
 | `config.rs`       | root      | type for handling node configuration              |
 | `constants.rs`    | root      | central location of project wide constants        |
 | `main.rs`         | root      | program entry point                               |
-| `ictarus.rs`      | root      | the actual node                                   |
+| **`ictarus.rs`**  | root      | the actual node                                   |
 | `listener.rs`     | network   | trait/interface definition of a gossip listener   |
 | `neighbor.rs`     | network   | representation of a peer                          |
-| `receiver.rs`     | network   | handling of incoming transactions                 |
-| `sender.rs`       | network   | handling of outgoing transactions                 |
-| `tangle.rs`       | model     | the Tangle and Vertex datastructure               |
+| **`receiver.rs`** | network   | handling of incoming transactions                 |
+| **`sender.rs`**   | network   | handling of outgoing transactions                 |
+| **`tangle.rs`**   | model     | the Tangle and Vertex datastructure               |
 | `transaction.rs`  | model     | the datastructure for an IOTA transaction         |
 | `time.rs`         | util      | utily functions and macros to handle time         |
 | `curl.rs`         | crypto    | implementation of the Curl hashfunction           |
@@ -62,6 +62,45 @@ The following table should give you a basic overview about the project structure
 | `tryte_string.rs` | convert   | converting other representations to tryte strings |
 | `trytes.rs`       | convert   | converting other representations to trytes        |
 | `luts.rs`         | convert   | contains lookup tables for faster conversions     |
+
+We will now in more detail describe how those highlighted modules function internally:
+
+## Implementation of `ictarus.rs`
+The basic representation of an Ictarus node looks like this:
+```Rust
+pub struct Ictarus {
+    config: SharedConfig,
+    runtime: Runtime,
+    state: State,
+    tangle: SharedTangle,
+    neighbors: SharedNeighbors,
+    listeners: SharedListeners,
+    sending_queue: SharedSendingQueue,
+    request_queue: SharedRequestQueue,
+    kill_switch: (Trigger, Tripwire),
+}
+```
+The `Ictarus` type holds its own **configuration** that allows to specify its overall behavior and define its neighbors, a **runtime** to start asynchronous tasks using poll-based futures, a **state**, has access to the **Tangle**, access to its **neighbors** to update their gossip stats, a **sending queue** to being able to issue transactions on its own, a **request queue** to being able to add requests on its own, and a **kill switch** mechanism to gracefully end all asychronous tasks.
+
+The most important method on type is the **run** method. It will called from the **main** entry point of the application after reading the configuration file `ictarus.cfg` from the local file system.
+
+```Rust
+pub fn run(&mut self) -> Result<(), Box<std::error::Error>> {...}
+```
+It will do the following steps in that order:
+
+1. Update the node state to `State::Initializing`.
+2. Bind an UDP socket to the specified socket address. 
+3. Spawn an asynchronous task responsible for listening on the socket for incoming IOTA transactions.
+4. Spawn an asynchronous task responsible for sending and forwarding transactions to its neighbors as configured.
+5. Spawn an asynchronous task for printing printing round stats to the terminal.
+6. Update the node state to `State::Running`.
+
+## Implementation of `receiver.rs`
+
+## Implementation of `sender.rs`
+
+## Implementation of `tangle.rs`
 
 
 

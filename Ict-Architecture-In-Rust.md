@@ -40,6 +40,7 @@ While the Ict core implements the IOTA gossip protocol and is responsible for es
 
 ## Project structure
 The following table should give you a basic overview about the project structure:
+
 | File              | Submodule | Function                                          |
 | ----------------- | --------- | ------------------------------------------------- |
 | `config.rs`       | root      | type for handling node configuration              |

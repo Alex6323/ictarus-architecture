@@ -98,7 +98,15 @@ It will do the following steps in that order:
 
 ## Implementation of `receiver.rs`
 
+Flow chart of what how what spawned Receiver task is doing:
+
+<img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Receiver.png" />
+
 ## Implementation of `sender.rs`
+
+Flow chart of what how what spawned Sender task is doing:
+
+<img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Sender.png" />
 
 ## Implementation of `tangle.rs`
 

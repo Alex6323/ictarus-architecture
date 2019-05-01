@@ -38,4 +38,31 @@ While the Ict core implements the IOTA gossip protocol and is responsible for es
 
 # Architecture of Ictarus
 
+## Project structure
+The following table should give you a basic overview about the project structure:
+| File              | Submodule | Function                                          |
+| ----------------- | --------- | ------------------------------------------------- |
+| `config.rs`       | root      | type for handling node configuration              |
+| `constants.rs`    | root      | central location of project wide constants        |
+| `main.rs`         | root      | program entry point                               |
+| `ictarus.rs`      | root      | the actual node                                   |
+| `listener.rs`     | network   | trait/interface definition of a gossip listener   |
+| `neighbor.rs`     | network   | representation of a peer                          |
+| `receiver.rs`     | network   | handling of incoming transactions                 |
+| `sender.rs`       | network   | handling of outgoing transactions                 |
+| `tangle.rs`       | model     | the Tangle and Vertex datastructure               |
+| `transaction.rs`  | model     | the datastructure for an IOTA transaction         |
+| `time.rs`         | util      | utily functions and macros to handle time         |
+| `curl.rs`         | crypto    | implementation of the Curl hashfunction           |
+| `ascii.rs`        | convert   | converting other representations to ascii         |
+| `bytes.rs`        | convert   | converting other representations to bytes         |
+| `number.rs`       | convert   | converting other representations to numbers       |
+| `trits.rs`        | convert   | converting other representations to trits         |
+| `tryte_string.rs` | convert   | converting other representations to tryte strings |
+| `trytes.rs`       | convert   | converting other representations to trytes        |
+| `luts.rs`         | convert   | contains lookup tables for faster conversions     |
+
+
+
+
 

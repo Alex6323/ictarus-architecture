@@ -1,6 +1,8 @@
+!!! THIS IS A DRAFT AND NOT A FINISHED DOCUMENT FOR EARLY FEEDBACK !!!
+
 # Abstract
 
-This document is about an early - probably the first - attempt to port the [official IOTA Ict node](https://github.com/iotaledger/ict.git) implementation written in Java to the Rust programming language. This rather basic implementation was named **Ictarus** and we will be using it for reference during this document. Its source code can be found [here](https://github.com/Alex6323/Ictarus.git). The author's intention was to get a good understanding about the inner workings of the Ict node software and at the same time deepen his knowledge about the Rust programming language. This document is intended to summarize the his findings and explain some architectural deviations compared to the Java prototype that were necessary to end up with an idiomaticly written software.
+This document is about an early - probably the first - attempt to port the [official IOTA Ict node](https://github.com/iotaledger/ict.git) implementation written in Java to the Rust programming language. This rather basic implementation was named **Ictarus** and we will be using it for reference during this document. Its source code can be found [here](https://github.com/Alex6323/Ictarus.git). The author's intention was to get a good understanding about the inner workings of the Ict node software and at the same time deepen his knowledge about the Rust programming language. This document is intended to summarize the findings and explain some architectural deviations from the Java prototype that were necessary to end up with an idiomatically written software.
 
 # Why using Rust for Ict
 
@@ -20,15 +22,15 @@ Some of Rust's most notable features are:
 
 What makes Rust unique though is its ability to be not only a very safe language (guaranteed memory safety, no data races) but also be on par with the most performant languages in existence today that traditionally would have been picked instead. With Rust one no longer has to sacrifice safety over performance or vice versa. 
 
-How does Rust achieve that? First and foremost by restricting itself to only employ *zero-cost abstractions*. In easy terms that basically means, that
-1. One does not "pay" for something that one does not actually use.
-2. If one uses an abstraction, then you couldn't write it faster by hand.
+How does Rust achieve that? First and foremost by restricting itself to only employ *zero-cost abstractions*. In simple terms that basically means, that
+1. You do not "pay" for abstractions that you don't use.
+2. If you use a certain abstraction you cannot get any better by hand-coding it.
 
- On the other hand Rust introduces some new concepts, most notably *Ownership and Borrowing* which are an evolutionary step forward in language design. Those concepts make whole classes of bugs in Rust impossible which plague software development since decades, and it does so without impact on performance unlike other solutions to that problem like garbage collection.
+ On the other hand Rust introduces some new concepts, most notably those of *Ownership and Borrowing* which are an evolutionary step forward in language design. Those concepts make whole classes of bugs in Rust impossible which plague software development since decades, and it does so without impact on performance unlike other solutions to that problem like garbage collection.
 
-The consequence of those new concepts is however, that more care has to be taken upfront when laying out the architecture. As an example: It is not as trivial as in other languages to create self-referential objects like nodes in a linked list or vertices in a graph. Finding a good implementation here will be necessary to create a performant Tangle implementation. 
+The consequence of those concepts is however, that more care has to be taken upfront when laying out the architecture. When porting software written in an OOP style to Rust one quickly realizes that some solutions cannot be reimplemented 1:1 with just some syntax changes. The Rust compiler will often times reject those attempts and for good reasons. As an example: It is not as trivial as in other languages to create self-referential objects like nodes in a linked list or vertices in a graph. Finding a good implementation here will be necessary to create a performant Tangle implementation. The final Rust Ict node will look very different internally than its Java precursor.
 
-In the future the Ict network will be used for moving funds by utilizing connected and usually less powerful embedded devices. The programming language used to build such a system should mirror that and therefore be safe *and* fast at the same time. Rust fulfills such requirements, and is therefore a very good, if not a perfect fit. 
+In the future the Ict network will be used for moving not only data but also value by utilizing  directly connected and usually weak embedded IoT devices. The programming language used to build such a system should therefore be as safe *and* as performant as possible at the same time. Rust fulfills such requirements, and therefore should be a very good fit. But it should also be noted, that Rust is still a very young language and many libraries are still in heavy development themselves. This can be expected to become less and less of a problem in the years to come.  
 
 # About Ict
 
@@ -46,6 +48,7 @@ The following table should give you a basic overview about the project structure
 | `config.rs`       | root      | type for handling node configuration              |
 | `constants.rs`    | root      | central location of project wide constants        |
 | `main.rs`         | root      | program entry point                               |
+| `ixi.rs`          | root      | definition of the IOTA extension interface        |
 | **`ictarus.rs`**  | root      | the actual node                                   |
 | `listener.rs`     | network   | trait/interface definition of a gossip listener   |
 | `neighbor.rs`     | network   | representation of a peer                          |

@@ -24,7 +24,7 @@ What makes Rust unique though is its ability to be not only a very safe language
 
 How does Rust achieve that? First and foremost by restricting itself to only employ *zero-cost abstractions*. In simple terms that basically means, that
 1. You do not "pay" for abstractions that you don't use.
-2. If you use a certain abstraction you cannot get any better by hand-coding it.
+2. If you use a certain abstraction you cannot get better performance by hand-coding it.
 
  On the other hand Rust introduces some new concepts, most notably those of *Ownership and Borrowing* which are an evolutionary step forward in language design. Those concepts make whole classes of bugs in Rust impossible which plague software development since decades, and it does so without impact on performance unlike other solutions to that problem like garbage collection.
 
@@ -43,28 +43,28 @@ While the Ict core implements the IOTA gossip protocol and is responsible for es
 ## Project structure
 The following table should give you a basic overview about the project structure. Important types that hold most of the business logic are highlighted:
 
-| File              | Submodule | Function                                          |
-| ----------------- | --------- | ------------------------------------------------- |
-| `config.rs`       | root      | type for handling node configuration              |
-| `constants.rs`    | root      | central location of project wide constants        |
-| `main.rs`         | root      | program entry point                               |
-| `ixi.rs`          | root      | definition of the IOTA extension interface        |
-| **`ictarus.rs`**  | root      | the actual node                                   |
-| `listener.rs`     | network   | trait/interface definition of a gossip listener   |
-| `neighbor.rs`     | network   | representation of a peer                          |
-| **`receiver.rs`** | network   | handling of incoming transactions                 |
-| **`sender.rs`**   | network   | handling of outgoing transactions                 |
-| **`tangle.rs`**   | model     | the Tangle and Vertex datastructure               |
-| `transaction.rs`  | model     | the datastructure for an IOTA transaction         |
-| `time.rs`         | util      | utily functions and macros to handle time         |
-| `curl.rs`         | crypto    | implementation of the Curl hashfunction           |
-| `ascii.rs`        | convert   | converting other representations to ascii         |
-| `bytes.rs`        | convert   | converting other representations to bytes         |
-| `number.rs`       | convert   | converting other representations to numbers       |
-| `trits.rs`        | convert   | converting other representations to trits         |
-| `tryte_string.rs` | convert   | converting other representations to tryte strings |
-| `trytes.rs`       | convert   | converting other representations to trytes        |
-| `luts.rs`         | convert   | contains lookup tables for faster conversions     |
+| File              | Submodule | Function                                          | Dependencies                                               |
+| ----------------- | --------- | ------------------------------------------------- | ---------------------------------------------------------- |
+| `config.rs`       | root      | type for handling node configuration              | libstd, log                                                |
+| `constants.rs`    | root      | central location of project wide constants        | lazy_static, regex                                         |
+| `main.rs`         | root      | program entry point                               | libstd, pretty_env_logger                                  |
+| `ixi.rs`          | root      | definition of the IOTA extension interface        | libstd                                                     |
+| **`ictarus.rs`**  | root      | the actual node                                   | libstd, futures, log, priority_queue, stream_cancel, tokio |
+| `listener.rs`     | network   | trait/interface definition of a gossip listener   | libstd                                                     |
+| `neighbor.rs`     | network   | representation of a peer                          | libstd                                                     |
+| **`receiver.rs`** | network   | handling of incoming transactions                 | libstd, futures, log, rand, tokio                          |
+| **`sender.rs`**   | network   | handling of outgoing transactions                 | libstd, futures, log, tokio                                |
+| **`tangle.rs`**   | model     | the Tangle and Vertex datastructure               | libstd, lazy_static                                        |
+| `transaction.rs`  | model     | the datastructure for an IOTA transaction         | libstd                                                     |
+| `time.rs`         | util      | utily functions and macros to handle time         | libstd                                                     |
+| `curl.rs`         | crypto    | implementation of the Curl hashfunction           | *none*                                                     |
+| `ascii.rs`        | convert   | converting other representations to ascii         | libstd                                                     |
+| `bytes.rs`        | convert   | converting other representations to bytes         | *none*                                                     |
+| `number.rs`       | convert   | converting other representations to numbers       | *none*                                                     |
+| `trits.rs`        | convert   | converting other representations to trits         | *none*                                                     |
+| `tryte_string.rs` | convert   | converting other representations to tryte strings | libstd                                                     |
+| `trytes.rs`       | convert   | converting other representations to trytes        | *none*                                                     |
+| `luts.rs`         | convert   | contains lookup tables for faster conversions     | libstr, lazy_static                                        |
 
 We will now in more detail describe how those highlighted modules function internally:
 

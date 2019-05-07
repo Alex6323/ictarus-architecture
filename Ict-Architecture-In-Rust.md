@@ -1,10 +1,10 @@
 !!! THIS IS A DRAFT AND NOT A FINISHED DOCUMENT FOR EARLY FEEDBACK !!!
 
-# Abstract
+# Summary
 
 This document is about an early - probably the first - attempt to port the [official IOTA Ict node](https://github.com/iotaledger/ict.git) implementation written in Java to the Rust programming language. This rather basic implementation was named **Ictarus** and we will be using it for reference during this document. Its source code can be found [here](https://github.com/Alex6323/Ictarus.git). The author's intention was to get a good understanding about the inner workings of the Ict node software and at the same time deepen his knowledge about the Rust programming language. This document is intended to summarize the findings and explain some architectural deviations from the Java prototype that were necessary to end up with an idiomatically written software.
 
-# Why using Rust for Ict
+# About using Rust
 
 According to Wikipedia [Rust](https://en.wikipedia.org/wiki/Rust_(programming_language)) is a multi-paradigm systems programming language focused on safety, especially safe concurrency, which is syntactically similar to C++, but is designed to provide better memory safety while maintaining high performance. 
 
@@ -14,11 +14,10 @@ Some of Rust's most notable features are:
 * statically typed (but uses type inference to reduce boilerplate)
 * forced error handling
 * immutable variables by default
+* composition over inheritance
 * functional programming patterns (iterators, generators, closures)
 * built-in support for tests and benchmarks
-* easy toolchain management using the tool 'rustup'
-* easy project management using the tool 'cargo'
-* central package repository (crates.io)
+* easy-to-use tools for toolchain and dependency management for better productivity
 
 What makes Rust unique though is its ability to be not only a very safe language (guaranteed memory safety, no data races) but also be on par with the most performant languages in existence today that traditionally would have been picked instead. With Rust one no longer has to sacrifice safety over performance or vice versa. 
 
@@ -26,7 +25,7 @@ How does Rust achieve that? First and foremost by restricting itself to only emp
 1. You do not "pay" for abstractions that you don't use.
 2. If you use a certain abstraction you cannot get better performance by hand-coding it.
 
- On the other hand Rust introduces some new concepts, most notably those of *Ownership and Borrowing* which are an evolutionary step forward in language design. Those concepts make whole classes of bugs in Rust impossible which plague software development since decades, and it does so without impact on performance unlike other solutions to that problem like garbage collection.
+ On the other hand Rust introduces some new concepts, most notably those of *Ownership and Borrowing* which are an evolutionary step forward in language design. Those concepts make whole classes of bugs in Rust just impossible which plague software development since decades, and it does so without impact on performance unlike other solutions to that problem like garbage collection.
 
 The consequence of those concepts is however, that more care has to be taken upfront when laying out the architecture. When porting software written in an OOP style to Rust one quickly realizes that some solutions cannot be reimplemented 1:1 with just some syntax changes. The Rust compiler will often times reject those attempts and for good reasons. As an example: It is not as trivial as in other languages to create self-referential objects like nodes in a linked list or vertices in a graph. Finding a good implementation here will be necessary to create a performant Tangle implementation. The final Rust Ict node will look very different internally than its Java precursor.
 
@@ -34,11 +33,23 @@ In the future the Ict network will be used for moving not only data but also val
 
 # About Ict
 
-The **I**ota **c**ontrolled agen**t** (Ict) is a very flexible, module-based IOTA node. It can be very light-weight, but is not restricted to be so. Depending on the usecase it can be a very powerful node as well. It achieves this by implementing the IOTA eXtending Interface (IXI). The Ict node is specifically designed for the Internet of Things (IoT) and its diverse use cases. Targeted platforms are mainly single-board computers (SBCs) like Raspberry Pis and microcontrollers (MCUs) like the Cortex-M4 and upwards, but also more powerful platforms can be supported. To achieve this the node software is logically and programmatically separated into a core component (Ict core) and many modules implementing IXI to be able to be attached to the core. Modules are therefore usually referred to as IXI modules. 
+The **I**ota **c**ontrolled agen**t** (Ict) is a very flexible, modularized IOTA node. It can be very light-weight, but is not restricted to be so. Depending on the usecase it can be a very powerful node as well. It achieves this by implementing the IOTA eXtension Interface (IXI). The Ict node is specifically designed for the Internet of Things (IoT) and its diverse use cases. Targeted platforms are at first single-board computers (SBCs) like Raspberry Pis and similar devices. The final vision also includes microcontrollers (MCUs) with capabilities like the Cortex-M4 and upwards. To achieve this the node software is logically and programmatically separated into one single core component (Ict core) and in many so-called IXI modules, which can be written in different programming languages. The core itself might consist of replaceable units that allow for customized compilations to reduce the size of the binary if necessary.
 
-While the Ict core implements the IOTA gossip protocol and is responsible for establishing a friend-to-friend P2P network, buffering a certain amount of gossip in a transaction store, forming and appending the Tangle, and functioning as a gateway between the p2p network and its attached modules, the modules themselves define the actual functionality and the behavior of the node. Some module might turn the node into an access point for a p2p chat application or it might turn the node into a data-specific permanode that filters and diverts data into a database. The more resources available on the target platform the node is running on, the more modules can be can be hosted by the core and the more powerful the node becomes overall. On very constrained devices however it is possible to create a very specific single-use behavior.
+While the Ict core implements the IOTA gossip protocol and is responsible for establishing a P2P network, buffering a certain amount of gossip, holding and updating the Tangle, and functioning as a gateway between the P2P network and its attached modules, the modules themselves define the actual functionality and the behavior of the node. For example, some module might turn the node into an access point for a P2P chat application, another module might turn the node into a data filtering permanode that diverts data into a database. The more resources available on the target platform the node is running on, the more modules can be can be supported by the core and the more powerful the node becomes overall. On very constrained devices however it will be possible to create a very specific single-use behavior.
 
-# Architecture of Ictarus
+# Comparison of `Ictarus` with the reference implementation
+
+On a high level `Ictarus` follows the Java reference implementation very closely, though not 100%. In fact both implementations cannot run on the same network at the moment. Why that is will be explained in the following paragraphs. Due to the Rust language specifics the internal realization differs in many ways. That is because Rust is more a functional programming language than it is an object-oriented one. That has many consequences on the overall architecture. For example, there are no classes, and there is no object inheritence in Rust. 
+
+## Using poll-based futures for concurrency
+
+For concurrency in Rust it is idiomatic to use `futures` and `tokio` crates/libraries. Those are based on cooperative multitasking as opposed to preemptive multitasking, which simply means, that tasks try to make some progress for example on some I/O resource, and voluntarily yield execution back to the task executor if they can't. While this has the danger of locking up the whole application when implemented not carefully, it has the benefit of being a zero-cost abstraction resulting in maximum performance, which is of major importance since being able to support weak devices is a major goal of this project.
+
+## Attach request hashes only if required to spare bandwidth
+
+## Disallow multiple requests for the same transaction
+
+## Missing features
 
 ## Project structure
 The following table should give you a basic overview about the project structure. Important types that hold most of the business logic are highlighted:

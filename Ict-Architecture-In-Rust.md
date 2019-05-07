@@ -74,7 +74,7 @@ Missing features are:
 
 # Architecture Overview
 
-The [architecture](https://raw.githubusercontent.com/iotaledger/ict/master/docs/assets/deployment.png) is almost identical to the Java version, but doesn't have the `Node` abstraction yet. Instead it just uses a `Receiver` and a `Sender` abstraction for dealing its peers.
+The [architecture](https://raw.githubusercontent.com/iotaledger/ict/master/docs/assets/deployment.png) is almost identical to the Java version, but doesn't have the `Node` abstraction yet. Instead it just uses a `Receiver` and a `Sender` abstraction for dealing with its peers.
 
 ## Project structure
 The following table gives a basic overview about the project structure. Important types that hold most of the business logic are highlighted:
@@ -104,7 +104,7 @@ The following table gives a basic overview about the project structure. Importan
 
 We will now in more detail describe how those highlighted modules function internally:
 
-## Implementation of `ictarus.rs`
+## Implementation of `Ictarus`
 The basic representation of an Ictarus node looks like this:
 ```Rust
 pub struct Ictarus {
@@ -137,19 +137,19 @@ It will do the following steps in that order:
 
 An important difference to the Java implementation is, that instead of using raw threads, the Rust implementation uses poll-based futures which are based on cooperative multitasking instead of preemptive multitasking where instead of context switching a processes voluntarily yield control when they cannot make any progress.
 
-## Implementation of `receiver.rs`
+## Implementation of the `Receiver`
 
 Flow chart of what how what spawned Receiver task is doing:
 
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Receiver.png" />
 
-## Implementation of `sender.rs`
+## Implementation of the `Sender`
 
 Flow chart of what how what spawned Sender task is doing:
 
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Sender.png" />
 
-## Implementation of `tangle.rs`
+## Implementation of the `Tangle`
 
 The `Tangle` datastructure looks like this:
 

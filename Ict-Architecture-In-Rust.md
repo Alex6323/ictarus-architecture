@@ -2,57 +2,82 @@
 
 # Summary
 
-This document is about an early - probably the first - attempt to port the [official IOTA Ict node](https://github.com/iotaledger/ict.git) implementation written in Java to the Rust programming language. This rather basic implementation was named **Ictarus** and we will be using it for reference during this document. Its source code can be found [here](https://github.com/Alex6323/Ictarus.git). The author's intention was to get a good understanding about the inner workings of the Ict node software and at the same time deepen his knowledge about the Rust programming language. This document is intended to summarize the findings and explain some architectural deviations from the Java prototype that were necessary to end up with an idiomatically written software.
+This document is about an early - probably the first - attempt to port the [official IOTA Ict node](https://github.com/iotaledger/ict.git) implementation written in Java to the Rust programming language. This rather basic implementation was named **Ictarus** and we will be using this term for simple reference. Its source code can be found [here](https://github.com/Alex6323/Ictarus.git). The author's intention was to get a good understanding about the inner workings of the Ict node software and at the same time deepen his knowledge about the Rust programming language. This document is intended to summarize the findings and explain some of the architectural deviations from the Java prototype that were necessary to end up with an idiomatically written Rust software.
 
 # About using Rust
 
 According to Wikipedia [Rust](https://en.wikipedia.org/wiki/Rust_(programming_language)) is a multi-paradigm systems programming language focused on safety, especially safe concurrency, which is syntactically similar to C++, but is designed to provide better memory safety while maintaining high performance. 
 
-Some of Rust's most notable features are:
+Some of Rust's most **notable** features are:
 * compiled language
 * no automated garbage collection
 * statically typed (but uses type inference to reduce boilerplate)
 * forced error handling
 * immutable variables by default
-* composition over inheritance
+* follows composition over inheritance
 * functional programming patterns (iterators, generators, closures)
 * built-in support for tests and benchmarks
-* easy-to-use tools for toolchain and dependency management for better productivity
+* easy-to-use tools for toolchain and dependency management for improved productivity
 
-What makes Rust unique though is its ability to be not only a very safe language (guaranteed memory safety, no data races) but also be on par with the most performant languages in existence today that traditionally would have been picked instead. With Rust one no longer has to sacrifice safety over performance or vice versa. 
+What makes Rust **unique** though is its ability to be not only a very safe language (guaranteed memory safety, no data races) but also be on par with the most performant languages in existence today that traditionally would have been picked instead. But compared to those with Rust one no longer has to sacrifice safety over performance or vice versa. 
 
 How does Rust achieve that? First and foremost by restricting itself to only employ *zero-cost abstractions*. In simple terms that basically means, that
 1. You do not "pay" for abstractions that you don't use.
-2. If you use a certain abstraction you cannot get better performance by hand-coding it.
+2. If you use a certain abstraction you cannot improve performance by hand-coding it.
 
- On the other hand Rust introduces some new concepts, most notably those of *Ownership and Borrowing* which are an evolutionary step forward in language design. Those concepts make whole classes of bugs in Rust just impossible which plague software development since decades, and it does so without impact on performance unlike other solutions to that problem like garbage collection.
+ On the other hand Rust introduces some **new concepts**, most notably those of *Ownership and Borrowing* which are an evolutionary step forward in language design. Those concepts tackle the problem of secure memory and resource management, and applied make whole classes of bugs in Rust just impossible which plague software development since decades. It does so without impact on performance unlike other "solutions" to that problem like garbage collection.
 
-The consequence of those concepts is however, that more care has to be taken upfront when laying out the architecture. When porting software written in an OOP style to Rust one quickly realizes that some solutions cannot be reimplemented 1:1 with just some syntax changes. The Rust compiler will often times reject those attempts and for good reasons. As an example: It is not as trivial as in other languages to create self-referential objects like nodes in a linked list or vertices in a graph. Finding a good implementation here will be necessary to create a performant Tangle implementation. The final Rust Ict node will look very different internally than its Java precursor.
+The consequence of those concepts is however, that more care has to be taken upfront when laying out the architecture. When porting software written in an OOP style to Rust one quickly realizes that some solutions cannot be reimplemented 1:1 with just changed syntax. The Rust compiler will often times reject those attempts and for good reasons. As an example: It is not as trivial as in other languages to create self-referential objects like nodes in a linked list or vertices in a graph. There is a whole (open) [book](https://rust-unofficial.github.io/too-many-lists/index.html) written to address this topic in Rust. Finding a good implementation here will be necessary to create a performant Tangle implementation that is capable of running even on low-end devices. All in all one can expect the final Rust Ict node to be looking very different internally compared to its Java precursor.
 
-In the future the Ict network will be used for moving not only data but also value by utilizing  directly connected and usually weak embedded IoT devices. The programming language used to build such a system should therefore be as safe *and* as performant as possible at the same time. Rust fulfills such requirements, and therefore should be a very good fit. But it should also be noted, that Rust is still a very young language and many libraries are still in heavy development themselves. This can be expected to become less and less of a problem in the years to come.  
+In the future the Ict network will be used for moving not only data but also large amounts (in sum over time) of value by utilizing directly connected and usually low-powered embedded IoT devices. The chosen programming language to build such a system should therefore be as safe *and* as performant as possible. Rust fulfills such requirements, and therefore should be a very good fit. But it should also be noted, that Rust is still a very young language and many libraries are still in heavy development themselves. There might be problems ahead related to some dependencies being in beta state themselves, or the Rust community still being relatively small. But due to the ever increasing popularity of Rust this can be expected to become less and less of a problem in the years to come.  
 
 # About Ict
 
-The **I**ota **c**ontrolled agen**t** (Ict) is a very flexible, modularized IOTA node. It can be very light-weight, but is not restricted to be so. Depending on the usecase it can be a very powerful node as well. It achieves this by implementing the IOTA eXtension Interface (IXI). The Ict node is specifically designed for the Internet of Things (IoT) and its diverse use cases. Targeted platforms are at first single-board computers (SBCs) like Raspberry Pis and similar devices. The final vision also includes microcontrollers (MCUs) with capabilities like the Cortex-M4 and upwards. To achieve this the node software is logically and programmatically separated into one single core component (Ict core) and in many so-called IXI modules, which can be written in different programming languages. The core itself might consist of replaceable units that allow for customized compilations to reduce the size of the binary if necessary.
+The **I**ota **c**ontrolled agen**t** (Ict) is a very flexible, modularized IOTA node. It can be very light-weight, but is not restricted to be so. Depending on the usecase it can be a very powerful node as well. It achieves this by implementing the IOTA eXtension Interface (IXI). The Ict node is specifically designed for the Internet of Things (IoT) and its diverse use cases. Targeted platforms are at first single-board computers (SBCs) like Raspberry Pis and similar devices. The final vision also includes a combination of microcontrollers (MCUs) with capabilities like the [Cortex-M4](https://developer.arm.com/ip-products/processors/cortex-m/cortex-m4) and upwards, and [tiny FPGAs](https://hackaday.io/project/26848-tinyfpga-b-series) to do the heavy lifting. To achieve this the node software is logically and programmatically separated into one single core component (Ict core) and in many so-called IXI modules, which can be written in different programming languages. The core itself might consist of replaceable units that allow for customized compilations to reduce the size of the binary if necessary.
 
-While the Ict core implements the IOTA gossip protocol and is responsible for establishing a P2P network, buffering a certain amount of gossip, holding and updating the Tangle, and functioning as a gateway between the P2P network and its attached modules, the modules themselves define the actual functionality and the behavior of the node. For example, some module might turn the node into an access point for a P2P chat application, another module might turn the node into a data filtering permanode that diverts data into a database. The more resources available on the target platform the node is running on, the more modules can be can be supported by the core and the more powerful the node becomes overall. On very constrained devices however it will be possible to create a very specific single-use behavior.
+While the Ict core implements the IOTA gossip protocol and is responsible for establishing a P2P network, buffering a certain amount of gossip, holding and updating the Tangle, and functioning as a gateway between the P2P network and its attached modules, the modules themselves define the actual functionality and the behavior of the node. For example, some module might turn the node into an access point for a P2P chat application, another module might turn the node into a data filtering permanode that diverts data into a database. The more resources available on the target platform the node is running on, the more modules can be hosted by the core and the more powerful the node becomes overall. On very constrained devices however it will be possible to create a very specific single-use behavior.
 
-# Comparison of `Ictarus` with the reference implementation
+# About Ictarus
 
-On a high level `Ictarus` follows the Java reference implementation very closely, though not 100%. In fact both implementations cannot run on the same network at the moment. Why that is will be explained in the following paragraphs. Due to the Rust language specifics the internal realization differs in many ways. That is because Rust is more a functional programming language than it is an object-oriented one. That has many consequences on the overall architecture. For example, there are no classes, and there is no object inheritence in Rust. 
+`Ictarus` is a Rust port of the Java Ict node software implementation. It was developed as a proof-of-concept (PoC) to show the feasibility of developing the Ict node software in Rust and not as a finished replacement for the Java version. Instead of adding features quickly and achieve feature parity the focus was on finding possible optimizations. Examples of that approach are bringing BCT-Curl and Troika to Rust, which can be found [here](https://github.com/Alex6323/bct_curl_rust), evaluating the use of transaction compression, which can be found [here](https://github.com/Alex6323/iota-lz4-udp) and helping the Java team with showcasing the use of protocol buffers in bridge.ixi which can be found [here](https://github.com/Alex6323/bridge.ixi-rust). There will be more such smaller "practical research" projects related to the network layer and the in-memory storage of the Tangle. Then we'll try to find consensus in our working group how to move forward.
+
+# Differences between `Ictarus` and the Java reference implementation
+
+On a high level `Ictarus` follows the Java reference implementation very closely, though not 100%. In fact both implementations cannot run on the same network at the moment. Why that is will be explained in the following paragraphs. Due to the Rust language specifics the internal realization differs in many ways. That is because Rust is more of a functional programming language than an object-oriented one. That has many consequences on the overall architecture. For example, there are no classes and no object inheritence in Rust. Rust uses containment hierarchies instead. 
 
 ## Using poll-based futures for concurrency
 
-For concurrency in Rust it is idiomatic to use `futures` and `tokio` crates/libraries. Those are based on cooperative multitasking as opposed to preemptive multitasking, which simply means, that tasks try to make some progress for example on some I/O resource, and voluntarily yield execution back to the task executor if they can't. While this has the danger of locking up the whole application when implemented not carefully, it has the benefit of being a zero-cost abstraction resulting in maximum performance, which is of major importance since being able to support weak devices is a major goal of this project.
+For concurrency in Rust it is idiomatic to use `futures` and `tokio` crates/libraries. Those are based on cooperative multitasking as opposed to preemptive multitasking, which simply means, that tasks try to make some progress for example on some I/O resource, and voluntarily yield execution back to the task executor if they can't. While this has the danger of locking up the whole application when implemented not carefully, it has the benefit of being a zero-cost abstraction resulting in maximum performance. Since being able to support weak devices is a major goal of this project this is of utmost importance.
 
 ## Attach request hashes only if required to spare bandwidth
 
-## Disallow multiple requests for the same transaction
+The reason why the Rust based Ict implementation is not compatible with the Java version is that transactions only carry a request hash if an actual request needs to be send. In the Java implementation the packet size is always the same. It fills this space with 9s to indicate that there is no request. Peeking into the future it is very likely that some form of compression will be used which results in a dynamic packet size anyway. Another problem with using transactions as request carrier is that sometimes packets get dropped by ISPs due to their size. And another problem is, that requests cannot be sent idependently from the gossip which introduces unnecessary latencies. We are looking into protocols that support stream multiplexing to being able to send gossip and requests in parallel, which also reduces individual packet size.
+
+## Sender is not implemented as a gossip listener
+
+The Java version makes the sender a gossip listener, which could have been done in Rust as well. However, we tried a different approach, i.e. facilitating a shared sending queue across all threads. Upon receiving a transaction via gossip the `receiver` decides whether the transaction needs to be forwarded to the peers. If so, then it determines a random forward delay and adds the transaction hash to a priority-based sending queue which orders its elements depending on timestamps. The `sender` on the other hand also has access to that queue and pops the next transaction hash when the delay has been exceeded. If so the `sender` will pull the bytes from the local buffer, and then send the assembled packet.
+
+## Disallow multiple requests for the same transaction from the same peer
+
+During implementation the author decided to disallow requesting the same transaction over and over, because he reasoned this would encourage lazy neighbors who simply rely on the storage capacity of their peers. This will be further discussed among the working group whether adopt this mechanism, remove it, or find something in between.
 
 ## Missing features
 
+Missing features are: 
+
+* IXI interface
+* Bundle creation
+* Proof-of-work
+* Tangle pruning
+* Webinterface
+* More...
+
+# Architecture Overview
+
+The [architecture](https://raw.githubusercontent.com/iotaledger/ict/master/docs/assets/deployment.png) is almost identical to the Java version, but doesn't have the `Node` abstraction yet. Instead it just uses a `Receiver` and a `Sender` abstraction for dealing its peers.
+
 ## Project structure
-The following table should give you a basic overview about the project structure. Important types that hold most of the business logic are highlighted:
+The following table gives a basic overview about the project structure. Important types that hold most of the business logic are highlighted:
 
 | File              | Submodule | Function                                          | Dependencies                                               |
 | ----------------- | --------- | ------------------------------------------------- | ---------------------------------------------------------- |

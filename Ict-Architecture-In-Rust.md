@@ -76,7 +76,7 @@ Apart from minor differences `Ictarus` follows very closely the [architecture](h
 
 ## Project structure
 
-The following table should give a basic overview about where things are located in `Ictarus`. Types that hold most of the business logic are highlighted:
+The following table should give a basic overview about where things are located in `Ictarus`. Additionally the dependencies of each module are provided in a separate column, and types that hold most of the business logic of the node are highlighted:
 
 | File              | Submodule | Function                                          | Dependencies                                               |
 | ----------------- | --------- | ------------------------------------------------- | ---------------------------------------------------------- |
@@ -188,6 +188,7 @@ It will do the following steps in that order:
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Ictarus.png" />
 
 An important difference to the Java implementation is, that instead of using raw threads, the Rust implementation uses poll-based futures which are based on cooperative multitasking instead of preemptive multitasking where instead of context switching a processes voluntarily yield control when they cannot make any progress.
+
 
 ## Implementation of the `Receiver`
 

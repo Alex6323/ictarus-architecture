@@ -103,7 +103,7 @@ The following table should give a basic overview about where things are located 
 
 The following paragraphs we will go into more detail how things were actually implemented roughly ordered by importance:
 
-## Basic Implementation of the `Ictarus` node
+## Basic implementation of `Ictarus`
 
 One of the most important abstractions is of couse the `Ictarus` node itself. Rather than explaining each single field we will let the code speak for itself, which should be easy to understand even if not familiar with Rust:
 
@@ -181,21 +181,18 @@ pub fn get_neighbors(&self) -> HashMap<SocketAddr, Neighbor>
 // Get the config of the node.
 pub fn get_config(&self) -> Config
 ```
-To start the `Ictarus` node we call the `run` method from `main.rs`, the entry point of the whole application.
-
-It will do the following steps in that order:
+To start the `Ictarus` node we call the `run` method from `main.rs`, the entry point of the whole application. After that it will do the following steps in that order:
 
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Ictarus.png" />
 
-An important difference to the Java implementation is, that instead of using raw threads, the Rust implementation uses poll-based futures which are based on cooperative multitasking instead of preemptive multitasking where instead of context switching a processes voluntarily yield control when they cannot make any progress.
+An important difference to the Java implementation is, that instead of using raw threads (preemptive multitasking) the Rust implementation uses poll-based futures (cooperative multitasking), which has the benefit of being a zero-cost abstraction. This comes at the cost that now the programmer has to make sure, that all asynchronous tasks get enough time to make progress and immediatedly yield control back to the executor if they can't at the moment.
 
 
-## Implementation of the `Receiver`
+## Basic implementation of `Receiver`
 
 `Ictarus` communicates via UDP with its neighbors. The receiving part is represented as follows:
 
 ```Rust
-/// Type for handling incoming messages from the neighbors.
 pub struct Receiver {
     config: SharedConfig,
     socket: UdpSocket,
@@ -221,15 +218,15 @@ impl Stream for Receiver {
 }
 ```
 
-The `poll` method is where all the interesting things happen. The following flow chart tries to give concise overview:
+The `poll` method is responsible for handling all the incoming UDP packets. The following flow chart tries to give concise overview of what `Ictarus` is currently doing:
 
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Receiver.png" />
 
-## Implementation of the `Sender`
+## Implementation of `Sender`
+
+ The sending part of `Ictarus` is modeled like so:
 
 ```Rust
-
-/// Type for handling outgoing messages to the neighbors.
 pub struct Sender {
     config: SharedConfig,
     socket: UdpSocket,
@@ -239,74 +236,25 @@ pub struct Sender {
     neighbors: SharedNeighbors,
     listeners: SharedListeners,
 }
+
+// Creates a new sender.
+pub fn new(config: SharedConfig, socket: UdpSocket, tangle: SharedTangle, sending_queue: SharedSendingQueue, request_queue: SharedRequestQueue, neighbors: SharedNeighbors, listeners: SharedListeners) -> Self 
+
+impl Stream for Sender {
+    type Item = ();
+    type Error = io::Error;
+
+    fn poll(&mut self) -> Poll<Option<()>, io::Error>
+}
 ```
 
-Flow chart of what how what spawned Sender task is doing:
+The `poll` method is responsible for handling all the outgoing UDP packets. The following flow chart tries to give concise overview of what `Ictarus` is currently doing:
 
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Sender.png" />
 
-## Implementation of the IOTA Ict Tangle
-
-The Ict `Tangle` datastructure and related types in Ictarus look like this:
-
-```Rust
-
-pub type SharedKey81 = Arc<Key81>;
-pub type SharedKey27 = Arc<Key27>;
-pub type Flags = u8;
-pub type SharedVertex = Arc<Vertex>;
-pub type MaybeTrunk = Option<SharedVertex>;
-pub type MaybeBranch = Option<SharedVertex>;
-
-pub struct Tangle {
-    vertices_by_hash: HashMap<SharedKey81, (SharedVertex, Flags, MaybeTrunk, MaybeBranch)>,
-    vertices_by_addr: HashMap<SharedKey81, HashSet<SharedVertex>>,
-    vertices_by_tag: HashMap<SharedKey27, HashSet<SharedVertex>>,
-}
-
-pub struct Vertex {
-    pub bytes: TxBytes,
-    pub key: SharedKey81,
-    pub addr_key: SharedKey81,
-    pub tag_key: SharedKey27,
-}
-
-```
-To allow for multiple references to the same data 
-In a future much more improved Ict implementation this will likely be renamed to `TransactionStore` and another type `Tangle` will be introduced which will be optimized to allow for traversing the DAG in a more efficient way.
-
-```Rust
-
-// Create a new Tangle.
-pub fn new(capacity: usize) -> Self
-
-// Get the current statistics about the Tangle.
-pub fn get_stats(&self) -> TangleStats
-
-// Marks a certain neighbor identfied by its index as sender of a certain transaction.
-pub fn update_senders(&mut self, key: &Key81, sender: usize)
-
-// Marks a certain neighbor identfied by its index as requester of a certain transaction.
-pub fn update_requesters(&mut self, key: &Key81, requester: usize)
-
-// Updates the trunk of a certain transaction.
-pub fn update_trunk(&mut self, key: &Key81, trunk: SharedVertex)
-
-// Updates the branch of a certain transaction.
-pub fn update_branch(&mut self, key: &Key81, branch: SharedVertex)
-
-// Attach a vertex to the Tangle.
-pub fn attach_vertex(&mut self, tx_key: SharedKey81, vertex: Vertex, flags: Flags, trunk: MaybeTrunk, branch: MaybeBranch) -> SharedVertex
-
-```
-
-The most important method of this type is `attach_vertex`. It takes a key that is derived from the transaction hash, a `Vertex`, some metadata called `flags` and maybe a reference to a `trunk` vertex and a maybe a reference to a `branch` vertex. This is achieved by using an enumeration type, that can either hold `Some(vertex)` or `None` to represent that this vertex is not available at the moment and might be updated at a later point in time.
-
-
-
 ## Implementation of IOTA Transactions
 
-In Ictarus an IOTA transaction looks exactly like the protocol specification for the Ict network:
+In `Ictarus` an IOTA transaction looks exactly like the protocol specification for the Ict network:
 
 ```Rust
 pub struct Transaction {
@@ -328,7 +276,7 @@ pub struct Transaction {
 }
 ```
 
-This type's public API provides methods to create, convert and modify transactions:
+Its API provides methods to create, convert and modify transactions:
 
 ```Rust
 // Create a transaction from bytes.
@@ -362,4 +310,140 @@ pub fn message(mut self, message: &str) -> Self
 pub fn tag(mut self, tag: &str) -> Self
 
 ```
+
+## Basic implementation of the Ict Tangle
+
+In `Ictarus` the `Tangle` is implemented very similarly to the Java version with some minor modifications, one being that the `HashMap` keys are not `String`s, but thread-safe fixed-sized arrays derived from the Curl hash of a transaction. Another difference is, that `Ictarus` stores the raw bytes, rather than the deserialized transaction object. Depending on whether the trunk and/or branch transaction is also locally available, pointers to those vertices are stored as part of a tuple struct. Furthermore metadata regarding which neighbor sent or requested a certain transaction is stored in a `unsigned byte` called `Flags`. Like the Java implementation `Ictarus` also provides partitions for vertices that share the same address or the same tag.
+
+```Rust
+pub struct Tangle {
+    vertices_by_hash: HashMap<SharedKey81, (SharedVertex, Flags, MaybeTrunk, MaybeBranch)>,
+    vertices_by_addr: HashMap<SharedKey81, HashSet<SharedVertex>>,
+    vertices_by_tag: HashMap<SharedKey27, HashSet<SharedVertex>>,
+}
+
+pub struct Vertex {
+    pub bytes: TxBytes,
+    pub key: SharedKey81,
+    pub addr_key: SharedKey81,
+    pub tag_key: SharedKey27,
+}
+
+pub type SharedKey81 = Arc<Key81>;
+pub type SharedKey27 = Arc<Key27>;
+pub type Flags = u8;
+pub type SharedVertex = Arc<Vertex>;
+pub type MaybeTrunk = Option<SharedVertex>;
+pub type MaybeBranch = Option<SharedVertex>;
+
+```
+The API for the `Tangle` representation looks like this:
+
+```Rust
+// Create a new Tangle of a fixed capacity.
+pub fn new(capacity: usize) -> Self
+
+// Get the current statistics about the Tangle.
+pub fn get_stats(&self) -> TangleStats
+
+// Marks a certain neighbor identfied by its index as sender of a certain transaction.
+pub fn update_senders(&mut self, key: &Key81, sender: usize)
+
+// Marks a certain neighbor identfied by its index as requester of a certain transaction.
+pub fn update_requesters(&mut self, key: &Key81, requester: usize)
+
+// Updates the trunk of a certain transaction.
+pub fn update_trunk(&mut self, key: &Key81, trunk: SharedVertex)
+
+// Updates the branch of a certain transaction.
+pub fn update_branch(&mut self, key: &Key81, branch: SharedVertex)
+
+// Attach a vertex to the Tangle.
+pub fn attach_vertex(&mut self, tx_key: SharedKey81, vertex: Vertex, flags: Flags, trunk: MaybeTrunk, branch: MaybeBranch) -> SharedVertex
+
+```
+
+## Basic implementation of `Config`
+
+The configuration of an `Ictarus` node is very basic like the early version of the Java implementation:
+
+```Rust
+pub struct Config {
+    pub min_forward_delay: u64,
+    pub max_forward_delay: u64,
+    pub host: String,
+    pub port: u16,
+    pub round_duration: u64,
+    pub neighbors: Vec<SocketAddr>,
+}
+```
+
+Its current API looks like this:
+
+```Rust
+// Set the UDP port of the node.
+pub fn set_port(&mut self, port: u16)
+
+// Set the host name of the node.
+pub fn set_host(&mut self, host: &str)
+
+// Adds a neighbor to the config.
+pub fn add_neighbor(&mut self, address: &str)
+
+// Get the socket address of the node.
+pub fn get_socket_addr(&self) -> SocketAddr
+
+// Reads the config from file.
+pub fn from_file(file: &str) -> Self 
+```
+
+Additionally there is `ConfigBuilder` type to create `Config`s easily which is straighforward and omitted to keep this document as concise as possible.
+
+## Basic implementation of `GossipEventListener`
+
+The analogon to interfaces in Java are `traits` to define shared behavior across types in Rust. All listeners share, that they want to get notified when transactions arrived or were sent. `Ictarus` implements this trait like so:
+
+```Rust
+pub trait GossipEventListener {
+    fn on_transaction_received(&mut self, tx: &Transaction, hash: Trytes81);
+    fn on_transaction_sent(&mut self, tx: &Transaction, hash: Trytes81);
+}
+```
+To store all listeners and make them available across all threads we create a shorthand `SharedListeners` for a complex vector holding types that implement the trait `GossipEventListener`:
+
+```Rust
+pub type SharedListeners = Arc<Mutex<Vec<Box<dyn GossipEventListener + Send>>>>;
+
+```
+
+## Basic implementation of `Neighbor`
+
+`Ictarus` models its neighbors by assigning a certain index, a socket address and some stats that are collected within a certain time period:
+
+```Rust
+pub struct Neighbor {
+    pub index: usize,
+    pub address: SocketAddr,
+    pub stats: NeighborStats,
+}
+
+pub type SharedNeighbors = Arc<RwLock<HashMap<SocketAddr, Neighbor>>>;
+
+pub struct NeighborStats {
+    pub received_all: u64,
+    pub received_new: u64,
+    pub received_invalid: u64,
+    pub prev_received_all: u64,
+    pub prev_received_new: u64,
+    pub prev_received_invalid: u64,
+}
+```
+
+## Curl
+
+`Ictarus` facilitates the functional version of the standard Curl implementation which is roughly twice as fast to hash incoming transactions one by one. 
+
+## Converter functions
+
+`Ictarus` implements all necessary functions to convert between trits, trytes, tryte strings, ascii and numbers. Those are standard implementations and omitted here for brevity.
 

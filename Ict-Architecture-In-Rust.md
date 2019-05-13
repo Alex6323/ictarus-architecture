@@ -185,12 +185,7 @@ To start the `Ictarus` node we call the `run` method from `main.rs`, the entry p
 
 It will do the following steps in that order:
 
-1. Update the node state to `State::Initializing`.
-2. Bind an UDP socket to the specified socket address. 
-3. Spawn an asynchronous task responsible for listening on the socket for incoming IOTA transactions.
-4. Spawn an asynchronous task responsible for sending and forwarding transactions to its neighbors as configured.
-5. Spawn an asynchronous task for printing printing round stats to the terminal.
-6. Update the node state to `State::Running`.
+<img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Ictarus.png" />
 
 An important difference to the Java implementation is, that instead of using raw threads, the Rust implementation uses poll-based futures which are based on cooperative multitasking instead of preemptive multitasking where instead of context switching a processes voluntarily yield control when they cannot make any progress.
 

@@ -1,5 +1,3 @@
-!!! THIS IS A DRAFT AND NOT A FINISHED DOCUMENT FOR EARLY FEEDBACK !!!
-
 # Summary
 
 This document is about an early - probably the first - attempt to port the [official IOTA Ict node](https://github.com/iotaledger/ict.git) implementation written in Java to the Rust programming language. This rather basic implementation was named **Ictarus** and we will be using this term for simple reference. Its source code can be found [here](https://github.com/Alex6323/Ictarus.git). The author's intention was to get a good understanding about the inner workings of the Ict node software and at the same time deepen his knowledge about the Rust programming language. This document is intended to summarize the findings and explain some of the architectural deviations from the Java prototype that were necessary to end up with an idiomatically written Rust software.
@@ -72,12 +70,13 @@ Missing features are:
 * Webinterface
 * More...
 
-# Architecture Overview
+# Architecture
 
-The [architecture](https://raw.githubusercontent.com/iotaledger/ict/master/docs/assets/deployment.png) is almost identical to the Java version, but doesn't have the `Node` abstraction yet. Instead it just uses a `Receiver` and a `Sender` abstraction for dealing with its peers.
+Apart from minor differences `Ictarus` follows very closely the [architecture](https://raw.githubusercontent.com/iotaledger/ict/master/docs/assets/deployment.png) of the Java implementation.
 
 ## Project structure
-The following table gives a basic overview about the project structure. Important types that hold most of the business logic are highlighted:
+
+The following table should give a basic overview about where things are located in `Ictarus`. Types that hold most of the business logic are highlighted:
 
 | File              | Submodule | Function                                          | Dependencies                                               |
 | ----------------- | --------- | ------------------------------------------------- | ---------------------------------------------------------- |
@@ -100,13 +99,18 @@ The following table gives a basic overview about the project structure. Importan
 | `trits.rs`        | convert   | converting other representations to trits         | *none*                                                     |
 | `tryte_string.rs` | convert   | converting other representations to tryte strings | libstd                                                     |
 | `trytes.rs`       | convert   | converting other representations to trytes        | *none*                                                     |
-| `luts.rs`         | convert   | contains lookup tables for faster conversions     | libstr, lazy_static                                        |
+| `luts.rs`         | convert   | contains lookup tables for faster conversions     | libstd, lazy_static                                        |
 
-We will now in more detail describe how those highlighted modules function internally:
+The following paragraphs we will go into more detail how things were actually implemented roughly ordered by importance:
 
-## Implementation of `Ictarus`
-The basic representation of an Ictarus node looks like this:
+## Basic Implementation of the `Ictarus` node
+
+One of the most important abstractions is of couse the `Ictarus` node itself. Rather than explaining each single field we will let the code speak for itself, which should be easy to understand even if not familiar with Rust:
+
 ```Rust
+pub type SharedSendingQueue = Arc<Mutex<PriorityQueue<(SharedKey81, SenderMode), Reverse<Instant>>>>;
+pub type SharedRequestQueue = Arc<RwLock<VecDeque<Bytes54>>>;
+
 pub struct Ictarus {
     config: SharedConfig,
     runtime: Runtime,
@@ -118,14 +122,67 @@ pub struct Ictarus {
     request_queue: SharedRequestQueue,
     kill_switch: (Trigger, Tripwire),
 }
-```
-The `Ictarus` type holds its own **configuration** that allows to specify its overall behavior and define its neighbors, a **runtime** to start asynchronous tasks using poll-based futures, a **state**, has access to the **Tangle**, access to its **neighbors** to update their gossip stats, a **sending queue** to being able to issue transactions on its own, a **request queue** to being able to add requests on its own, and a **kill switch** mechanism to gracefully end all asychronous tasks.
 
-The most important method on type is the **run** method. It will called from the **main** entry point of the application after reading the configuration file `ictarus.cfg` from the local file system.
+pub enum State {
+    Initializing,
+    Running,
+    Terminating,
+    Off,
+}
+
+```
+It is important to note, that types that are prefixed with `Shared` are types that are potentially shared across threads. The `Runtime` type is responsible for running the event loop and running the asynchronous tasks.
+
+The API for this node looks like this:
 
 ```Rust
-pub fn run(&mut self) -> Result<(), Box<std::error::Error>> {...}
+// Create a new Ictarus node from a config.
+pub fn new(config: SharedConfig) -> Self
+
+// Start the node.
+pub fn run(&mut self) -> Result<(), Box<std::error::Error>>
+
+// Block the main thread until kill signal.
+pub fn wait_for_kill_signal(self)
+
+// Stop the node immediatedly.
+pub fn kill(mut self)
+
+// Submit a message to the network.
+pub fn submit_message(&mut self, message: &str, tag: Option<&str>) -> String
+
+// Submit a transaction to the network.
+pub fn submit_transaction(&mut self, tx: Transaction) -> String
+
+// Check whether the node stores a certain transaction.
+pub fn has_transaction(&self, hash: &str) -> bool
+
+// Get a certain transaction.
+pub fn get_transaction(&self, hash: &str) -> Option<Transaction>
+
+// Get a certain vertex.
+pub fn get_vertex(&self, hash: &str) -> Option<SharedVertex>
+
+// Request a certain transaction from the neighbors.
+pub fn request_transaction(&mut self, hash: &str) -> bool
+
+// Add a gossip listener.
+pub fn add_gossip_listener(&mut self, listener: GossipListener)
+
+// Get a neighbor by his index.
+pub fn get_neighbor_by_index(&self, index: usize) -> Neighbor
+
+// Get current tangle statistics.
+pub fn get_tangle_stats(&self) -> TangleStats
+
+// Get all neighbors identified by their socket address.
+pub fn get_neighbors(&self) -> HashMap<SocketAddr, Neighbor>
+
+// Get the config of the node.
+pub fn get_config(&self) -> Config
 ```
+To start the `Ictarus` node we call the `run` method from `main.rs`, the entry point of the whole application.
+
 It will do the following steps in that order:
 
 1. Update the node state to `State::Initializing`.
@@ -139,43 +196,174 @@ An important difference to the Java implementation is, that instead of using raw
 
 ## Implementation of the `Receiver`
 
-Flow chart of what how what spawned Receiver task is doing:
+`Ictarus` communicates via UDP with its neighbors. The receiving part is represented as follows:
+
+```Rust
+/// Type for handling incoming messages from the neighbors.
+pub struct Receiver {
+    config: SharedConfig,
+    socket: UdpSocket,
+    tangle: SharedTangle,
+    sending_queue: SharedSendingQueue,
+    request_queue: SharedRequestQueue,
+    neighbors: SharedNeighbors,
+    listeners: SharedListeners,
+    buffer: [u8; PACKET_SIZE_WITH_REQUEST],
+    waiting: HashMap<SharedKey81, HashSet<WaitingFor>>,
+    deadlines: VecDeque<(SharedKey81, Instant)>,
+}
+
+// Create a new receiver.
+pub fn new(config: SharedConfig, socket: UdpSocket, tangle: SharedTangle, sending_queue: SharedSendingQueue, request_queue: SharedRequestQueue, neighbors: SharedNeighbors, listeners: SharedListeners) -> Self
+
+// Receiver is implemented as a stream of futures.
+impl Stream for Receiver {
+    type Item = ();
+    type Error = io::Error;
+
+    fn poll(&mut self) -> Poll<Option<()>, io::Error>
+}
+```
+
+The `poll` method is where all the interesting things happen. The following flow chart tries to give concise overview:
 
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Receiver.png" />
 
 ## Implementation of the `Sender`
 
+```Rust
+
+/// Type for handling outgoing messages to the neighbors.
+pub struct Sender {
+    config: SharedConfig,
+    socket: UdpSocket,
+    tangle: SharedTangle,
+    sending_queue: SharedSendingQueue,
+    request_queue: SharedRequestQueue,
+    neighbors: SharedNeighbors,
+    listeners: SharedListeners,
+}
+```
+
 Flow chart of what how what spawned Sender task is doing:
 
 <img src="https://raw.githubusercontent.com/Alex6323/Ict-Architecture-In-Rust/master/images/Sender.png" />
 
-## Implementation of the `Tangle`
+## Implementation of the IOTA Ict Tangle
 
-The `Tangle` datastructure looks like this:
+The Ict `Tangle` datastructure and related types in Ictarus look like this:
 
 ```Rust
+
+pub type SharedKey81 = Arc<Key81>;
+pub type SharedKey27 = Arc<Key27>;
+pub type Flags = u8;
+pub type SharedVertex = Arc<Vertex>;
+pub type MaybeTrunk = Option<SharedVertex>;
+pub type MaybeBranch = Option<SharedVertex>;
+
 pub struct Tangle {
     vertices_by_hash: HashMap<SharedKey81, (SharedVertex, Flags, MaybeTrunk, MaybeBranch)>,
     vertices_by_addr: HashMap<SharedKey81, HashSet<SharedVertex>>,
     vertices_by_tag: HashMap<SharedKey27, HashSet<SharedVertex>>,
 }
+
+pub struct Vertex {
+    pub bytes: TxBytes,
+    pub key: SharedKey81,
+    pub addr_key: SharedKey81,
+    pub tag_key: SharedKey27,
+}
+
 ```
-Note: In the current implementation is it used as a store of transaction or as in-memory database. In a new implementation this will become what probably will be called `TransactionStore` as it better describes it functionality. A separate type will be created and given the name `Tangle`, which then is optimized to store and update references between vertices.
+To allow for multiple references to the same data 
+In a future much more improved Ict implementation this will likely be renamed to `TransactionStore` and another type `Tangle` will be introduced which will be optimized to allow for traversing the DAG in a more efficient way.
+
+```Rust
+
+// Create a new Tangle.
+pub fn new(capacity: usize) -> Self
+
+// Get the current statistics about the Tangle.
+pub fn get_stats(&self) -> TangleStats
+
+// Marks a certain neighbor identfied by its index as sender of a certain transaction.
+pub fn update_senders(&mut self, key: &Key81, sender: usize)
+
+// Marks a certain neighbor identfied by its index as requester of a certain transaction.
+pub fn update_requesters(&mut self, key: &Key81, requester: usize)
+
+// Updates the trunk of a certain transaction.
+pub fn update_trunk(&mut self, key: &Key81, trunk: SharedVertex)
+
+// Updates the branch of a certain transaction.
+pub fn update_branch(&mut self, key: &Key81, branch: SharedVertex)
+
+// Attach a vertex to the Tangle.
+pub fn attach_vertex(&mut self, tx_key: SharedKey81, vertex: Vertex, flags: Flags, trunk: MaybeTrunk, branch: MaybeBranch) -> SharedVertex
+
+```
 
 The most important method of this type is `attach_vertex`. It takes a key that is derived from the transaction hash, a `Vertex`, some metadata called `flags` and maybe a reference to a `trunk` vertex and a maybe a reference to a `branch` vertex. This is achieved by using an enumeration type, that can either hold `Some(vertex)` or `None` to represent that this vertex is not available at the moment and might be updated at a later point in time.
 
+
+
+## Implementation of IOTA Transactions
+
+In Ictarus an IOTA transaction looks exactly like the protocol specification for the Ict network:
+
 ```Rust
-pub fn attach_vertex(
-        &mut self,
-        tx_key: SharedKey81,
-        vertex: Vertex,
-        flags: Flags,
-        trunk: MaybeTrunk,
-        branch: MaybeBranch,
-    ) -> SharedVertex {...}
+pub struct Transaction {
+    pub signature_fragments: String,
+    pub extra_data_digest: String,
+    pub address: String,
+    pub value: i64,
+    pub issuance_timestamp: i64,
+    pub timelock_lower_bound: i64,
+    pub timelock_upper_bound: i64,
+    pub bundle_nonce: String,
+    pub trunk: String,
+    pub branch: String,
+    pub tag: String,
+    pub attachment_timestamp: i64,
+    pub attachment_timestamp_lower_bound: i64,
+    pub attachment_timestamp_upper_bound: i64,
+    pub nonce: String,
+}
 ```
 
+This type's public API provides methods to create, convert and modify transactions:
 
+```Rust
+// Create a transaction from bytes.
+pub fn from_tx_bytes(bytes: &[u8]) -> Self
 
+// Create a transaction from a tryte string 'AX9D...'.
+pub fn from_tryte_string(tryte_string: &str) -> Self
 
+// Create a transaction from trytes.
+pub fn from_tx_trytes(trytes: &TxTrytes) -> Self
+
+// Convert a transaction to bytes.
+pub fn as_bytes(&self) -> TxBytes
+
+// Convert a transaction to a tryte string 'AX9D...'.
+pub fn as_tryte_string(&self) -> String
+
+// Convert a transaction to trits.
+pub fn as_trits(&self) -> TxTrits
+
+// Convert a transaction to trytes.
+pub fn as_trytes(&self) -> TxTrytes
+
+// Get the Curl hash of the transaction.
+pub fn get_hash(&self) -> Trytes81
+
+// Store an ASCII message inside of the signature message fragment.
+pub fn message(mut self, message: &str) -> Self
+
+// Set the tag of the transaction.
+pub fn tag(mut self, tag: &str) -> Self
+
+```
 
